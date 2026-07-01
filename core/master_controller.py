@@ -1,3 +1,5 @@
+import time
+
 from managers.database_manager import DatabaseManager
 from managers.app_manager import AppManager
 from managers.rasp_manager import RaspManager
@@ -32,8 +34,20 @@ class MasterController:
     def run(self):
         print("[Master] System Running. . .")
 
-        #while True:    
-        #    pass
+        try:
+            while True:
+                self.read_plc_and_save(["D100"])
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("[Master] Stopped by user.")
+
+    def read_plc_and_save(self, addresses):
+        readings = self.plc.read_values(addresses)
+
+        if not readings:
+            return False
+
+        return self.database.save_plc_data(readings)
 
     def start(self):
         print("[Master] Starting. . .")
