@@ -1,3 +1,5 @@
 pymysql
 pyyaml
 pymcprotocol
+fastapi
+uvicorn

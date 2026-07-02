@@ -34,9 +34,17 @@ class MasterController:
     def run(self):
         print("[Master] System Running. . .")
 
+        SYNC_EVERY_N_LOOPS = 60  # 1 loop = 1 sec, so 60 loops = 1 min
+
         try:
+            loop_count = 0
             while True:
                 self.read_plc_and_save(["D100"])
+
+                loop_count += 1
+                if loop_count % SYNC_EVERY_N_LOOPS == 0:
+                    self.database.sync_to_cloud()
+
                 time.sleep(1)
         except KeyboardInterrupt:
             print("[Master] Stopped by user.")
