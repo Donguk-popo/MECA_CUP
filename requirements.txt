@@ -1,0 +1,3 @@
+pymysql
+pyyaml
+pymcprotocol

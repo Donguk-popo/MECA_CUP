@@ -1,4 +1,4 @@
-class JetsonManager:
+class RaspManager:
     def __init__(self):
         print("[Jetson] Init. . .")
 
