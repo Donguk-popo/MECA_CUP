@@ -1,6 +1,6 @@
 class RaspManager:
     def __init__(self):
-        print("[Jetson] Init. . .")
+        print("[Rasp] Init. . .")
 
     def connect(self):
-        print("[Jetson] Connecting. . .")
+        print("[Rasp] Connecting. . .")

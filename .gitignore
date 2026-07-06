@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual Environment
+master_venv/
+venv/
+.venv/
+
+# VS Code
+.vscode/
+
+# JetBrains
+.idea/
+
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+.env.*
+
+# Database
+*.db
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python cache
+.pytest_cache/
+.mypy_cache/
