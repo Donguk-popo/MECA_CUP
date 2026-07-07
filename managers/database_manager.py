@@ -93,6 +93,8 @@ class DatabaseManager:
                         qr_code VARCHAR(64) NOT NULL,
                         flight_no VARCHAR(20) NOT NULL,
                         status VARCHAR(20) NOT NULL,
+                        segment INT NULL,
+                        discharge_point INT NULL,
                         inspection_result VARCHAR(20),
                         registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -100,6 +102,18 @@ class DatabaseManager:
                         remark VARCHAR(255)
                     )
                 """)
+
+                for column, ddl in (
+                    ("segment", "ALTER TABLE baggage ADD COLUMN segment INT NULL AFTER status"),
+                    ("discharge_point", "ALTER TABLE baggage ADD COLUMN discharge_point INT NULL AFTER segment"),
+                ):
+                    cursor.execute(
+                        """SELECT COUNT(*) FROM information_schema.columns
+                           WHERE table_schema = DATABASE() AND table_name = 'baggage' AND column_name = %s""",
+                        (column,)
+                    )
+                    if cursor.fetchone()[0] == 0:
+                        cursor.execute(ddl)
 
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS event_log (
@@ -144,20 +158,20 @@ class DatabaseManager:
             )
 
             baggages = [
-                ("RFID-001", "김민준", "QR-0001", "KE001", "REGISTERED", "NORMAL", None, None),
-                ("RFID-002", "이서연", "QR-0002", "KE002", "CIRCULATING", "NORMAL", None, None),
-                ("RFID-003", "박도윤", "QR-0003", "OZ101", "READY", "NORMAL", None, None),
-                ("RFID-004", "최지우", "QR-0004", "OZ102", "DELIVERED", "NORMAL", "NOW()", None),
-                ("RFID-005", "정하윤", "QR-0005", "7C201", "DEFECT", "DEFECT", None, "표면 손상 확인됨"),
+                ("RFID-001", "김민준", "QR-0001", "KE001", "REGISTERED", None, None, "NORMAL", None, None),
+                ("RFID-002", "이서연", "QR-0002", "KE002", "CIRCULATING", 3, None, "NORMAL", None, None),
+                ("RFID-003", "박도윤", "QR-0003", "OZ101", "READY", None, 7, "NORMAL", None, None),
+                ("RFID-004", "최지우", "QR-0004", "OZ102", "DELIVERED", None, None, "NORMAL", "NOW()", None),
+                ("RFID-005", "정하윤", "QR-0005", "7C201", "DEFECT", None, None, "DEFECT", None, "표면 손상 확인됨"),
             ]
-            for rfid_tag, owner_name, qr_code, flight_no, status, inspection_result, delivered_at, remark in baggages:
+            for rfid_tag, owner_name, qr_code, flight_no, status, segment, discharge_point, inspection_result, delivered_at, remark in baggages:
                 cursor.execute(
                     """
                     INSERT INTO baggage
-                        (rfid_tag, owner_name, qr_code, flight_no, status, inspection_result, delivered_at, remark)
-                    VALUES (%s, %s, %s, %s, %s, %s, {}, %s)
+                        (rfid_tag, owner_name, qr_code, flight_no, status, segment, discharge_point, inspection_result, delivered_at, remark)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, {}, %s)
                     """.format("NOW()" if delivered_at else "NULL"),
-                    (rfid_tag, owner_name, qr_code, flight_no, status, inspection_result, remark)
+                    (rfid_tag, owner_name, qr_code, flight_no, status, segment, discharge_point, inspection_result, remark)
                 )
 
             events = [
@@ -193,6 +207,15 @@ class DatabaseManager:
                     CREATE TABLE IF NOT EXISTS sync_state (
                         name VARCHAR(50) PRIMARY KEY,
                         last_id INT NOT NULL DEFAULT 0
+                    )
+                """)
+
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS plc_log (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        device VARCHAR(20) NOT NULL,
+                        value INT NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
 

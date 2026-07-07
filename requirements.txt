@@ -4,4 +4,4 @@ pymcprotocol
 fastapi
 uvicorn
 aiomysql
-mqtt
+paho-mqtt
