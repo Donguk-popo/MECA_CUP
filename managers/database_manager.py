@@ -63,6 +63,118 @@ class DatabaseManager:
             print(f"[DB] Save Failed: {e}")
             return False
 
+    def init_baggage_schema(self, seed_sample_data=True):
+        """Create the baggage/passenger/event_log tables and, optionally,
+        insert 5 sample rows into each (only if they're still empty)."""
+
+        if not self.connection:
+            print("[DB] Not connected")
+            return False
+
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS passenger (
+                        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                        name VARCHAR(100) NOT NULL,
+                        qr_code VARCHAR(64) NOT NULL UNIQUE,
+                        phone VARCHAR(20),
+                        flight_no VARCHAR(20),
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    )
+                """)
+
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS baggage (
+                        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                        rfid_tag VARCHAR(32) NOT NULL UNIQUE,
+                        owner_name VARCHAR(100) NOT NULL,
+                        qr_code VARCHAR(64) NOT NULL,
+                        flight_no VARCHAR(20) NOT NULL,
+                        status VARCHAR(20) NOT NULL,
+                        inspection_result VARCHAR(20),
+                        registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        delivered_at DATETIME NULL,
+                        remark VARCHAR(255)
+                    )
+                """)
+
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS event_log (
+                        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                        baggage_id BIGINT NOT NULL,
+                        event_type VARCHAR(30) NOT NULL,
+                        message VARCHAR(255),
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (baggage_id) REFERENCES baggage(id)
+                    )
+                """)
+
+            self.connection.commit()
+            print("[DB] baggage/passenger/event_log schema ready")
+
+            if seed_sample_data:
+                self._seed_baggage_sample_data()
+
+            return True
+
+        except Exception as e:
+            print(f"[DB] Schema Init Failed: {e}")
+            return False
+
+    def _seed_baggage_sample_data(self):
+        with self.connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM baggage")
+            if cursor.fetchone()[0] > 0:
+                print("[DB] Sample data already present, skipping seed")
+                return
+
+            passengers = [
+                ("김민준", "QR-0001", "010-1111-1111", "KE001"),
+                ("이서연", "QR-0002", "010-2222-2222", "KE002"),
+                ("박도윤", "QR-0003", "010-3333-3333", "OZ101"),
+                ("최지우", "QR-0004", "010-4444-4444", "OZ102"),
+                ("정하윤", "QR-0005", "010-5555-5555", "7C201"),
+            ]
+            cursor.executemany(
+                "INSERT INTO passenger (name, qr_code, phone, flight_no) VALUES (%s, %s, %s, %s)",
+                passengers
+            )
+
+            baggages = [
+                ("RFID-001", "김민준", "QR-0001", "KE001", "REGISTERED", "NORMAL", None, None),
+                ("RFID-002", "이서연", "QR-0002", "KE002", "CIRCULATING", "NORMAL", None, None),
+                ("RFID-003", "박도윤", "QR-0003", "OZ101", "READY", "NORMAL", None, None),
+                ("RFID-004", "최지우", "QR-0004", "OZ102", "DELIVERED", "NORMAL", "NOW()", None),
+                ("RFID-005", "정하윤", "QR-0005", "7C201", "DEFECT", "DEFECT", None, "표면 손상 확인됨"),
+            ]
+            for rfid_tag, owner_name, qr_code, flight_no, status, inspection_result, delivered_at, remark in baggages:
+                cursor.execute(
+                    """
+                    INSERT INTO baggage
+                        (rfid_tag, owner_name, qr_code, flight_no, status, inspection_result, delivered_at, remark)
+                    VALUES (%s, %s, %s, %s, %s, %s, {}, %s)
+                    """.format("NOW()" if delivered_at else "NULL"),
+                    (rfid_tag, owner_name, qr_code, flight_no, status, inspection_result, remark)
+                )
+
+            events = [
+                (1, "REGISTERED", "RFID 태그 인식 및 캐리어 등록 완료"),
+                (2, "CIRCULATING", "컨베이어 순환 중"),
+                (3, "READY", "배출 준비 완료"),
+                (4, "DELIVERED", "승객 수령 완료"),
+                (5, "DEFECT", "AI 비전 검사 결과 불량 판정"),
+            ]
+            cursor.executemany(
+                "INSERT INTO event_log (baggage_id, event_type, message) VALUES (%s, %s, %s)",
+                events
+            )
+
+        self.connection.commit()
+        print("[DB] Seeded 5 sample rows into baggage/passenger/event_log")
+
     def sync_to_cloud(self):
         """Push local plc_log rows that haven't been synced yet to the cloud DB."""
 
