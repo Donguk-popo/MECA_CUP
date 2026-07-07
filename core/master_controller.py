@@ -34,7 +34,7 @@ class MasterController:
     def run(self):
         print("[Master] System Running. . .")
 
-        SYNC_EVERY_N_LOOPS = 60  # 1 loop = 1 sec, so 60 loops = 1 min
+        SYNC_EVERY_N_LOOPS = 1  # 1 loop = 1 sec, so 60 loops = 1 min
 
         try:
             loop_count = 0

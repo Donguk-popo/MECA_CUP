@@ -3,3 +3,4 @@ pyyaml
 pymcprotocol
 fastapi
 uvicorn
+aiomysql
