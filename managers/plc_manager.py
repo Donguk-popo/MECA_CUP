@@ -33,7 +33,7 @@ class PLCManager:
         returns dict {address: value}"""
 
         if not self.connected:
-            print("[PLC] Not connected")
+            # print("[PLC] Not connected")
             return {}
 
         try:

@@ -1,10 +1,11 @@
-database:
-    host: 127.0.0.1
-    port: 3306
-    user: root
-    password: "1234"
-    database: baggage_system
+mqtt:
+  broker: 131.186.61.247
+  port: 1883
+  topic: meca_cup/control
 
-plc:
-    ip: "192.168.3.39"
-    port: 5555
+database:
+  host: localhost
+  port: 3306
+  user: root
+  password: "1234"
+  database: baggage_system

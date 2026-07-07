@@ -34,7 +34,9 @@ class MasterController:
     def run(self):
         print("[Master] System Running. . .")
 
-        SYNC_EVERY_N_LOOPS = 1  # 1 loop = 1 sec, so 60 loops = 1 min
+        self.app.start()   # mqtt 메세지 수신 시작
+
+        SYNC_EVERY_N_LOOPS = 60  # 1 loop = 1 sec, so 60 loops = 1 min
 
         try:
             loop_count = 0
@@ -48,6 +50,9 @@ class MasterController:
                 time.sleep(1)
         except KeyboardInterrupt:
             print("[Master] Stopped by user.")
+
+        while True:
+            pass
 
     def read_plc_and_save(self, addresses):
         readings = self.plc.read_values(addresses)
