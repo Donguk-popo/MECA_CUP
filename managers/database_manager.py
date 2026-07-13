@@ -76,10 +76,21 @@ class DatabaseManager:
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS passenger (
                         id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                        name VARCHAR(100) NOT NULL,
-                        qr_code VARCHAR(64) NOT NULL UNIQUE,
-                        phone VARCHAR(20),
-                        flight_no VARCHAR(20),
+                        passenger_name VARCHAR(100) NOT NULL,
+                        pnr_code VARCHAR(10),
+                        e_ticket VARCHAR(20),
+                        origin_iata CHAR(3),
+                        dest_iata CHAR(3),
+                        carrier_code CHAR(3),
+                        flight_number VARCHAR(10),
+                        flight_date DATE,
+                        julian_date SMALLINT,
+                        cabin_class CHAR(1),
+                        seat_number VARCHAR(5),
+                        checkin_seq SMALLINT,
+                        passenger_status CHAR(1),
+                        bcbp_raw VARCHAR(255),
+                        baggage_tag VARCHAR(20),
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                     )
@@ -88,32 +99,32 @@ class DatabaseManager:
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS baggage (
                         id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                        rfid_tag VARCHAR(32) NOT NULL UNIQUE,
-                        owner_name VARCHAR(100) NOT NULL,
-                        qr_code VARCHAR(64) NOT NULL,
-                        flight_no VARCHAR(20) NOT NULL,
+                        baggage_tag VARCHAR(20),
+                        rfid_tag VARCHAR(32) UNIQUE,
+                        qr_code VARCHAR(64) NULL,
+                        owner_id BIGINT,
+                        flight_no VARCHAR(10),
                         status VARCHAR(20) NOT NULL,
-                        segment INT NULL,
-                        discharge_point INT NULL,
                         inspection_result VARCHAR(20),
-                        registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                         delivered_at DATETIME NULL,
-                        remark VARCHAR(255)
+                        FOREIGN KEY (owner_id) REFERENCES passenger(id)
                     )
                 """)
 
-                for column, ddl in (
-                    ("segment", "ALTER TABLE baggage ADD COLUMN segment INT NULL AFTER status"),
-                    ("discharge_point", "ALTER TABLE baggage ADD COLUMN discharge_point INT NULL AFTER segment"),
-                ):
-                    cursor.execute(
-                        """SELECT COUNT(*) FROM information_schema.columns
-                           WHERE table_schema = DATABASE() AND table_name = 'baggage' AND column_name = %s""",
-                        (column,)
-                    )
-                    if cursor.fetchone()[0] == 0:
-                        cursor.execute(ddl)
+                cursor.execute(
+                    """SELECT COUNT(*) FROM information_schema.statistics
+                       WHERE table_schema = DATABASE() AND table_name = 'baggage' AND index_name = 'rfid_tag'"""
+                )
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute("ALTER TABLE baggage ADD UNIQUE (rfid_tag)")
+
+                cursor.execute(
+                    """SELECT COUNT(*) FROM information_schema.columns
+                       WHERE table_schema = DATABASE() AND table_name = 'baggage' AND column_name = 'qr_code'"""
+                )
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute("ALTER TABLE baggage ADD COLUMN qr_code VARCHAR(64) NULL AFTER rfid_tag")
 
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS event_log (
@@ -139,39 +150,51 @@ class DatabaseManager:
             return False
 
     def _seed_baggage_sample_data(self):
+        from datetime import date
+
         with self.connection.cursor() as cursor:
             cursor.execute("SELECT COUNT(*) FROM baggage")
             if cursor.fetchone()[0] > 0:
                 print("[DB] Sample data already present, skipping seed")
                 return
 
+            flight_date = date(2026, 7, 9)
+            julian_date = flight_date.timetuple().tm_yday
+
+            # name, pnr_code, e_ticket, origin, dest, carrier, flight_number, cabin, seat, checkin_seq, passenger_status, bcbp_raw, baggage_tag
             passengers = [
-                ("김민준", "QR-0001", "010-1111-1111", "KE001"),
-                ("이서연", "QR-0002", "010-2222-2222", "KE002"),
-                ("박도윤", "QR-0003", "010-3333-3333", "OZ101"),
-                ("최지우", "QR-0004", "010-4444-4444", "OZ102"),
-                ("정하윤", "QR-0005", "010-5555-5555", "7C201"),
+                ("KIM/MINJUN", "ABCDEF", "1801234567890", "ICN", "NRT", "KE", "001", "Y", "12A", 1, "1", "M1KIM/MINJUN            EABCDEF ICNNRTKE 0001 190Y012A0001 15D", "KE0000001"),
+                ("LEE/SEOYEON", "GHIJKL", "1801234567891", "ICN", "NRT", "KE", "002", "Y", "14C", 2, "1", "M1LEE/SEOYEON           EGHIJKL ICNNRTKE 0002 190Y014C0002 15D", "KE0000002"),
+                ("PARK/DOYUN", "MNOPQR", "1801234567892", "ICN", "PUS", "OZ", "101", "Y", "05B", 3, "1", "M1PARK/DOYUN            EMNOPQR ICNPUSOZ 0101 190Y005B0003 15D", "OZ0000003"),
+                ("CHOI/JIWOO", "STUVWX", "1801234567893", "ICN", "PUS", "OZ", "102", "C", "02A", 4, "1", "M1CHOI/JIWOO            ESTUVWX ICNPUSOZ 0102 190C002A0004 15D", "OZ0000004"),
+                ("JUNG/HAYOON", "YZABCD", "1801234567894", "ICN", "CJU", "7C", "201", "Y", "20F", 5, "1", "M1JUNG/HAYOON           EYZABCD ICNCJU7C 0201 190Y020F0005 15D", "7C0000005"),
             ]
             cursor.executemany(
-                "INSERT INTO passenger (name, qr_code, phone, flight_no) VALUES (%s, %s, %s, %s)",
-                passengers
+                """INSERT INTO passenger
+                    (passenger_name, pnr_code, e_ticket, origin_iata, dest_iata, carrier_code,
+                     flight_number, flight_date, julian_date, cabin_class, seat_number,
+                     checkin_seq, passenger_status, bcbp_raw, baggage_tag)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                [(p[0], p[1], p[2], p[3], p[4], p[5], p[6], flight_date, julian_date,
+                  p[7], p[8], p[9], p[10], p[11], p[12]) for p in passengers]
             )
 
+            # baggage_tag, rfid_tag, owner_id, flight_no, status, inspection_result, delivered_at
             baggages = [
-                ("RFID-001", "김민준", "QR-0001", "KE001", "REGISTERED", None, None, "NORMAL", None, None),
-                ("RFID-002", "이서연", "QR-0002", "KE002", "CIRCULATING", 3, None, "NORMAL", None, None),
-                ("RFID-003", "박도윤", "QR-0003", "OZ101", "READY", None, 7, "NORMAL", None, None),
-                ("RFID-004", "최지우", "QR-0004", "OZ102", "DELIVERED", None, None, "NORMAL", "NOW()", None),
-                ("RFID-005", "정하윤", "QR-0005", "7C201", "DEFECT", None, None, "DEFECT", None, "표면 손상 확인됨"),
+                ("KE0000001", "RFID-001", 1, "KE001", "REGISTERED", "NORMAL", None),
+                ("KE0000002", "RFID-002", 2, "KE002", "CIRCULATING", "NORMAL", None),
+                ("OZ0000003", "RFID-003", 3, "OZ101", "READY", "NORMAL", None),
+                ("OZ0000004", "RFID-004", 4, "OZ102", "DELIVERED", "NORMAL", "NOW()"),
+                ("7C0000005", "RFID-005", 5, "7C201", "DEFECT", "DEFECT", None),
             ]
-            for rfid_tag, owner_name, qr_code, flight_no, status, segment, discharge_point, inspection_result, delivered_at, remark in baggages:
+            for baggage_tag, rfid_tag, owner_id, flight_no, status, inspection_result, delivered_at in baggages:
                 cursor.execute(
                     """
                     INSERT INTO baggage
-                        (rfid_tag, owner_name, qr_code, flight_no, status, segment, discharge_point, inspection_result, delivered_at, remark)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, {}, %s)
+                        (baggage_tag, rfid_tag, owner_id, flight_no, status, inspection_result, delivered_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, {})
                     """.format("NOW()" if delivered_at else "NULL"),
-                    (rfid_tag, owner_name, qr_code, flight_no, status, segment, discharge_point, inspection_result, remark)
+                    (baggage_tag, rfid_tag, owner_id, flight_no, status, inspection_result)
                 )
 
             events = [
