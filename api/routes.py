@@ -2,7 +2,6 @@ import html
 import os
 from contextlib import asynccontextmanager
 from typing import Optional
-
 import aiomysql
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -16,8 +15,13 @@ DB_NAME = os.environ.get("DB_NAME", "baggage_system")
 
 VALID_STATUSES = {"REGISTERED", "CIRCULATING", "READY", "DELIVERED", "DEFECT"}
 
+plc_manager = None
+
 pool = None
 
+def set_plc_manager(manager):
+    global plc_manager
+    plc_manager = manager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -56,7 +60,6 @@ async def execute(query, args=None):
         async with conn.cursor() as cursor:
             await cursor.execute(query, args or ())
             return cursor.lastrowid, cursor.rowcount
-
 
 def _render_table(rows):
     if not rows:
@@ -280,17 +283,48 @@ async def confirm_delivery(req: ConfirmDeliveryRequest):
     """SafeClaim 앱의 수취 확인 스캔: 로그인한 승객이 수취대에서 QR을 스캔하면 그 값을
     본인 수하물(owner_id로 식별) 레코드의 qr_code에 기록하고 DELIVERED로 갱신한다
     (수취대 센서 하드웨어 완성 전 임시 로직)."""
+
     baggage_row = await fetch_one(
         "SELECT * FROM baggage WHERE owner_id = %s ORDER BY id DESC LIMIT 1",
         (req.passenger_id,),
     )
     if not baggage_row:
-        raise HTTPException(404, "no baggage found for passenger")
+        raise HTTPException(404, "no baggage found for passengesr")
 
+    # await execute(
+    #     "UPDATE baggage SET qr_code = %s, status = 'DELIVERED', delivered_at = NOW() WHERE id = %s",
+    #     (req.qr_code, baggage_row["id"]),
+    # )
+    # # QR_CODE:2 → 2
+    # position = int(req.qr_code.split(":")[1])
+
+    # if plc_manager:
+    #     plc_manager.write_value(
+    #         "D100",
+    #         position
+    # )
+    # else:
+    #     print("[API]PLC Manager 없음")
     await execute(
         "UPDATE baggage SET qr_code = %s, status = 'DELIVERED', delivered_at = NOW() WHERE id = %s",
         (req.qr_code, baggage_row["id"]),
     )
+
+
+    try:
+        position = int(req.qr_code.split(":")[1])
+    except Exception:
+        raise HTTPException(400, "invalid qr format")
+
+
+    if plc_manager:
+        plc_manager.write_value(
+            "D100",
+            position
+        )
+    else:
+        print("[API] PLC Manager 없음")
+
     await execute(
         "INSERT INTO event_log (baggage_id, event_type, message) VALUES (%s, %s, %s)",
         (baggage_row["id"], "DELIVERED", "승객 앱 QR 스캔으로 수취 확인"),

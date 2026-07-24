@@ -1,6 +1,7 @@
 import yaml
 import pymysql
 
+print("### DATABASE MANAGER LOADED ###")
 class DatabaseManager:
     def __init__(self):
         print("[DB] Init. . .")
@@ -13,7 +14,7 @@ class DatabaseManager:
             with open('config/config.yaml', 'r',encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
-            db = config["database"]
+            db = config["cloud_database"]
 
             self.connection = pymysql.connect(
                 host=db["host"],
@@ -62,7 +63,68 @@ class DatabaseManager:
         except Exception as e:
             print(f"[DB] Save Failed: {e}")
             return False
+##########################################
+# FRID
+    def update_baggage_status_by_rfid(self, rfid_tag):
+        """
+        RFID 인식 시 baggage 상태 변경
+        CIRCULATING -> READY
+        """
 
+        if not self.connection:
+            print("[DB] Not connected")
+            return False
+
+        try:
+            with self.connection.cursor() as cursor:
+                # RFID로 수하물 조회
+                cursor.execute(
+                    """
+                    SELECT baggage_tag, status
+                    FROM baggage
+                    WHERE rfid_tag=%s
+                    """,
+                    (rfid_tag,)
+                )
+                result = cursor.fetchone()
+                if not result:
+                    print(f"[DB] RFID not found : {rfid_tag}")
+                    return False
+                baggage_tag, status = result
+
+                # print(
+                #     f"[DB] {baggage_tag} current status : {status}"
+                # )
+
+                # 정렬 상태 -> 분배 변경
+                if status == "CIRCULATING":
+                    cursor.execute(
+                        """
+                        UPDATE baggage
+                        SET status='READY'
+                        WHERE rfid_tag=%s
+                        """,
+                        (rfid_tag,)
+                    )
+                    self.connection.commit()
+                    print(
+                        f"[DB] {baggage_tag} : CIRCULATING -> READY"
+                    )
+                    return True
+
+                # 이미 분배 이상이면 그대로 유지
+                elif status == "CIRCULATING":
+                    return True
+                # 도착 등 다른 상태
+                else:
+                    return False
+
+
+        except Exception as e:
+
+            print(f"[DB] Status Update Failed : {e}")
+            return False
+#################################################
     def init_baggage_schema(self, seed_sample_data=True):
         """Create the baggage/passenger/event_log tables and, optionally,
         insert 5 sample rows into each (only if they're still empty)."""
@@ -292,3 +354,5 @@ class DatabaseManager:
         except Exception as e:
             print(f"[DB] Cloud Sync Failed: {e}")
             return False
+
+        

@@ -11,7 +11,7 @@ DB_CONF = config["database"]
 CLOUD_DB_CONF = config["cloud_database"]
 
 HOST = "0.0.0.0"  # 192.168.3.41(이더넷) 등 모든 인터페이스에서 연결을 받음
-PORT = 9000
+PORT = 5050
 
 # 스위치를 누를 때마다 다음 상태로 순환
 STATUS_CYCLE = ["REGISTERED", "CIRCULATING", "READY", "DELIVERED"]
